@@ -39,7 +39,7 @@ def make_interp(model,tar_l,temperature=1.):
     with torch.no_grad():
         # compute overlap-add parameters (not-learnable)
         # in order to generate overlap-add interpolations at different length thant the training n_grains
-        ola_window = signal.hann(l_grain,sym=False)
+        ola_window = signal.windows.hann(l_grain,sym=False)
         ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_grains,1).type(torch.float32)
         ola_windows[0,:l_grain//2] = ola_window[l_grain//2]
         ola_windows[-1,l_grain//2:] = ola_window[l_grain//2]

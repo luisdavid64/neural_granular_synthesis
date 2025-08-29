@@ -180,10 +180,11 @@ class waveform_model(pl.LightningModule):
         self.filter_size = l_grain//2+1
         self.filter_window = nn.Parameter(torch.fft.fftshift(torch.hann_window(l_grain)),requires_grad=False)
         
-        ola_window = signal.hann(l_grain,sym=False)
+        # Hann is a bell curve kind of window
+        ola_window = signal.windows.hann(l_grain,sym=False)
         ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_grains,1).type(torch.float32)
         ola_windows[0,:l_grain//2] = ola_window[l_grain//2] # start of 1st grain is not windowed for preserving attacks
-        ola_windows[-1,l_grain//2:] = ola_window[l_grain//2]
+        ola_windows[-1,l_grain//2:] = ola_window[l_grain//2] # end of last grain is not windowed for preserving tails
         self.ola_windows = nn.Parameter(ola_windows,requires_grad=False)
         
         self.slice_kernel = nn.Parameter(torch.eye(l_grain).unsqueeze(1),requires_grad=False)
@@ -386,6 +387,34 @@ class waveform_model(pl.LightningModule):
             print("tot_grad = ", tot_grad)
         opt.zero_grad()
 
+    def adjust_target_length(self, new_tar_l):
+        """
+        Adjust tar_l and all dependent parameters to match a new target length (new_tar_l).
+        """
+        l_grain = self.hparams.l_grain
+        hop_size = self.hparams.hop_size
+        # Compute the closest valid n_grains for the new target length
+        n_grains = int((new_tar_l - l_grain) // hop_size + 1)
+        # Recompute tar_l to ensure consistency
+        tar_l = int((n_grains - 1) * hop_size + l_grain)
+        self.tar_l = tar_l
+        self.hparams.n_grains = n_grains
+        # Update OLA windows and folders
+        ola_window = signal.windows.hann(l_grain, sym=False)
+        ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_grains, 1).type(torch.float32)
+        ola_windows[0, :l_grain // 2] = ola_window[l_grain // 2]
+        ola_windows[-1, l_grain // 2:] = ola_window[l_grain // 2]
+        self.ola_windows = nn.Parameter(ola_windows, requires_grad=False)
+        self.slice_kernel = nn.Parameter(torch.eye(l_grain).unsqueeze(1), requires_grad=False)
+        self.ola_folder = nn.Fold((tar_l, 1), (l_grain, 1), stride=(hop_size, 1))
+        if self.hparams.normalize_ola:
+            unfolder = nn.Unfold((l_grain, 1), stride=(hop_size, 1))
+            input_ones = torch.ones(1, 1, tar_l, 1)
+            ola_divisor = self.ola_folder(unfolder(input_ones)).squeeze()
+            self.ola_divisor = nn.Parameter(ola_divisor, requires_grad=False)
+        print(f"[WARNING] Model tar_l and n_grains adjusted to {tar_l} and {n_grains}.")
+        print(f"[WARNING] Model hop_size adjusted to {hop_size}.")
+
 
 # ------------
 # LATENT AUTO-ENCODER (series-level embedding)
@@ -558,6 +587,15 @@ class latent_model(pl.LightningModule):
                     print(name, "param.grad is None")
             print("tot_grad = ", tot_grad)
         opt.zero_grad()
+        
+    def adjust_target_length(self, n_grains):
+        """
+        Adjust n_grains and all dependent parameters to match a new number of grains.
+        WARNING: Only use if your model architecture supports variable sequence lengths.
+        """
+        self.hparams.n_grains = n_grains
+        # If you have any buffers or layers that depend on n_grains, update them here.
+        print(f"[WARNING] Latent model n_grains adjusted to {n_grains}. Only use if model supports variable sequence length.")
 
 
 # ------------
@@ -681,6 +719,18 @@ class hierarchical_model(pl.LightningModule):
                     print(name, "param.grad is None")
             print("tot_grad = ", tot_grad)
         opt.zero_grad()
+
+    def adjust_target_length(self, new_tar_l):
+        """
+        Adjust both w_model and l_model to match a new target length (tar_l) and synchronize n_grains.
+        WARNING: Only use if both submodels support variable input/sequence length.
+        """
+        # Adjust w_model and get new n_grains
+        self.w_model.adjust_target_length(new_tar_l)
+        n_grains = self.w_model.hparams.n_grains
+        # Adjust l_model to match n_grains
+        self.l_model.adjust_target_length(n_grains)
+        print(f"[INFO] Synchronized w_model and l_model to tar_l={self.w_model.tar_l}, n_grains={n_grains}")
 
 
 
