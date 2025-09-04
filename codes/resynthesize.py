@@ -37,16 +37,16 @@ def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False)
     audio_tensor = torch.tensor(audio, dtype=torch.float32).unsqueeze(0)
     audio_tensor = audio_tensor.to(device)
     # Encode and decode
+    use_cond=True
     with torch.no_grad():
         audio_recon = None
         if use_cond:
         # encoder_outputs = model.w_model.encode(audio_tensor)
-            l_encoder_outputs, w_encoder_outputs = model.encode(audio_tensor, sampling=False)
-            conds = torch.zeros(l_encoder_outputs["e"].shape[0]).long().to(device)
-            audio_recon, _= model.decode(l_encoder_outputs["e"], conds=conds)
+            conds = torch.zeros(1).long().to(device) + torch.randint(0, len(model.l_model.hparams.classes)-1, (1,)).long().to(device)
+            # conds = torch.zeros(1).long().to(device) + 0
+            audio_recon, _, _, _ = model(audio_tensor, conds)
         else:
             encoder_outputs = model.w_model.encode(audio_tensor)
-            encoder_outputs["z"] += -0.3
             audio_recon = model.w_model.decode(encoder_outputs["z"])
         audio_recon = audio_recon.cpu().squeeze().numpy()
 
