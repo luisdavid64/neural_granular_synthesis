@@ -9,7 +9,7 @@ import glob
 import numpy as np
 import soundfile as sf
 from scipy import signal
-
+import pathlib
 import torch
 from torch import nn
 
@@ -43,7 +43,6 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
     norm = np.zeros_like(audio, dtype=np.float32)
 
     ola_window = signal.windows.hann(tar_l, sym=False)
-    ola_window = signal.windows.gaussian(tar_l, std=tar_l / 8, sym=True)
     ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_frames, 1).type(torch.float32)
     ola_windows[0, :tar_l // 2] = ola_window[tar_l // 2]
     ola_windows[-1, tar_l // 2:] = ola_window[tar_l // 2]
@@ -81,10 +80,11 @@ if __name__ == "__main__":
     # parser.add_argument('--finetuned', action='store_true')
     parser.add_argument('--finetuned', default=0, type=int)
     parser.add_argument('--model_dir', default="outputs", type=str)
-    parser.add_argument('--export_dir', default="outputs/generations", type=str)
+    parser.add_argument('--export_dir', default="outputs/generations_luis", type=str)
     parser.add_argument('--samples_id', default=0, type=int)
     parser.add_argument('--temperature', default=1., type=float)
     parser.add_argument('--interp_len', default=4., type=float)
+    parser.add_argument('--audio', default="/Users/luisreyes/Desktop/samples/audio1.wav")
     args = parser.parse_args()
     
     if os.path.exists(args.export_dir) is False:
@@ -112,4 +112,8 @@ if __name__ == "__main__":
         print("\n*** loading pretrained waveform and latent models",args.waveform_mname,args.latent_mname)
         model = hierarchical_model(w_ckpt_file=w_ckpt_file,w_yaml_file=w_yaml_file,l_ckpt_file=l_ckpt_file,l_yaml_file=l_yaml_file)
     model.eval()
-    encode_and_resynthesize(model, "/Users/luisreyes/Desktop/samples/audio1.wav", "output_manual_ola.wav")
+    path = pathlib.Path(args.audio)
+    
+    # Output path is composed of export dir + path.name + manual_ola.wav
+    out_path = os.path.join(args.export_dir, path.stem + "_manual_ola.wav")
+    encode_and_resynthesize(model, args.audio, out_path)
