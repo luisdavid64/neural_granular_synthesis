@@ -32,7 +32,6 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
         sr = target_sr
     tar_l = model.w_model.tar_l
     hop_size = tar_l // 2  # 50% overlap
-    window = np.hanning(tar_l)
     n_frames = (len(audio) - tar_l) // hop_size + 1
     if n_frames < 1:
         n_frames = 1
@@ -42,21 +41,27 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
         audio = np.pad(audio, (0, pad_len))
     output = np.zeros_like(audio, dtype=np.float32)
     norm = np.zeros_like(audio, dtype=np.float32)
+
+    ola_window = signal.windows.hann(tar_l, sym=False)
+    ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_frames, 1).type(torch.float32)
+    ola_windows[0, :tar_l // 2] = ola_window[tar_l // 2]
+    ola_windows[-1, tar_l // 2:] = ola_window[tar_l // 2]
     with torch.no_grad():
         for i in range(n_frames):
+            window = ola_windows[i].numpy()
             start = i * hop_size
             end = start + tar_l
             chunk = audio[start:end] * window
             audio_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0).to(device)
-            l_encoder_outputs, w_encoder_outputs = model.encode(audio_tensor, sampling=False)
-            conds = torch.zeros(l_encoder_outputs["e"].shape[0]).long().to(device)
-            audio_recon, _ = model.decode(l_encoder_outputs["e"], conds=conds)
+            encoder_outputs = model.w_model.encode(audio_tensor)
+            encoder_outputs["z"] += -0.3
+            audio_recon = model.w_model.decode(encoder_outputs["z"])
             audio_recon = audio_recon.cpu().squeeze().numpy()
             output[start:end] += audio_recon * window
             norm[start:end] += window ** 2
     # Avoid division by zero
     norm[norm == 0] = 1e-8
-    output = output / norm
+    output = output
     # Remove padding if any
     output = output[:len(audio) - pad_len] if pad_len > 0 else output
     if output_path:
