@@ -55,11 +55,11 @@ def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False)
             end = start + tar_l
             chunk = audio[start:end] * window
             audio_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0).to(device)
-            use_cond=True
+            use_cond=False
             if use_cond:
             # encoder_outputs = model.w_model.encode(audio_tensor)
                 # conds = torch.zeros(1).long().to(device) + torch.randint(0, len(model.l_model.hparams.classes)-1, (1,)).long().to(device)
-                conds = torch.zeros(1).long().to(device) + 2
+                conds = torch.zeros(1).long().to(device) + 0
                 audio_recon, _, _, _ = model(audio_tensor, conds, sampling=True)
             else:
                 encoder_outputs = model.w_model.encode(audio_tensor)
