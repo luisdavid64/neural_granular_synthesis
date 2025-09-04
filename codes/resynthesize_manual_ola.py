@@ -43,6 +43,7 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
     norm = np.zeros_like(audio, dtype=np.float32)
 
     ola_window = signal.windows.hann(tar_l, sym=False)
+    ola_window = signal.windows.gaussian(tar_l, std=tar_l / 8, sym=True)
     ola_windows = torch.from_numpy(ola_window).unsqueeze(0).repeat(n_frames, 1).type(torch.float32)
     ola_windows[0, :tar_l // 2] = ola_window[tar_l // 2]
     ola_windows[-1, tar_l // 2:] = ola_window[tar_l // 2]
