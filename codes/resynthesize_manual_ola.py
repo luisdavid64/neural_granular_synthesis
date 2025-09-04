@@ -31,7 +31,8 @@ def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False)
         audio = resample(audio, int(len(audio) * target_sr / sr))
         sr = target_sr
     tar_l = model.w_model.tar_l
-    hop_size = tar_l // 2  # 50% overlap
+    # hop_size = tar_l // 2  # 50% overlap
+    hop_size = 512
     n_frames = (len(audio) - tar_l) // hop_size + 1
     # audio = signal.medfilt(audio, )  # simple denoising
     if n_frames < 1:
@@ -58,7 +59,7 @@ def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False)
             if use_cond:
             # encoder_outputs = model.w_model.encode(audio_tensor)
                 # conds = torch.zeros(1).long().to(device) + torch.randint(0, len(model.l_model.hparams.classes)-1, (1,)).long().to(device)
-                conds = torch.zeros(1).long().to(device) + 1 
+                conds = torch.zeros(1).long().to(device) + 2
                 audio_recon, _, _, _ = model(audio_tensor, conds, sampling=True)
             else:
                 encoder_outputs = model.w_model.encode(audio_tensor)
