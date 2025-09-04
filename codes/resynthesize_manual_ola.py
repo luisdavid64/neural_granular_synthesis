@@ -17,45 +17,51 @@ from models import hierarchical_model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False):
-    # Load audio
+def encode_and_resynthesize(model, audio_path, output_path=None):
+    """
+    Resynthesize an entire audio file using the pretrained model, with overlap-add batching.
+    """
+    model.to(device)
     audio, sr = sf.read(audio_path)
-    # Ensure mono
     if audio.ndim > 1:
         audio = np.mean(audio, axis=1)
-    # Audio is 44.8 kHz
-    # Resample if needed
     target_sr = model.w_model.hparams.sr
     if sr != target_sr:
         from scipy.signal import resample
         audio = resample(audio, int(len(audio) * target_sr / sr))
         sr = target_sr
-    # Crop or pad to model's expected length
-    model.adjust_target_length(len(audio))
-    model.to(device)
-    # Convert to tensor
-    audio_tensor = torch.tensor(audio, dtype=torch.float32).unsqueeze(0)
-    audio_tensor = audio_tensor.to(device)
-    # Encode and decode
+    tar_l = model.w_model.tar_l
+    hop_size = tar_l // 2  # 50% overlap
+    window = np.hanning(tar_l)
+    n_frames = (len(audio) - tar_l) // hop_size + 1
+    if n_frames < 1:
+        n_frames = 1
+    # Pad audio to fit full frames
+    pad_len = (n_frames - 1) * hop_size + tar_l - len(audio)
+    if pad_len > 0:
+        audio = np.pad(audio, (0, pad_len))
+    output = np.zeros_like(audio, dtype=np.float32)
+    norm = np.zeros_like(audio, dtype=np.float32)
     with torch.no_grad():
-        audio_recon = None
-        if use_cond:
-        # encoder_outputs = model.w_model.encode(audio_tensor)
+        for i in range(n_frames):
+            start = i * hop_size
+            end = start + tar_l
+            chunk = audio[start:end] * window
+            audio_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0).to(device)
             l_encoder_outputs, w_encoder_outputs = model.encode(audio_tensor, sampling=False)
             conds = torch.zeros(l_encoder_outputs["e"].shape[0]).long().to(device)
-            audio_recon, _= model.decode(l_encoder_outputs["e"], conds=conds)
-        else:
-            encoder_outputs = model.w_model.encode(audio_tensor)
-            encoder_outputs["z"] += -0.3
-            audio_recon = model.w_model.decode(encoder_outputs["z"])
-        audio_recon = audio_recon.cpu().squeeze().numpy()
-
-            
-    # Save or return
+            audio_recon, _ = model.decode(l_encoder_outputs["e"], conds=conds)
+            audio_recon = audio_recon.cpu().squeeze().numpy()
+            output[start:end] += audio_recon * window
+            norm[start:end] += window ** 2
+    # Avoid division by zero
+    norm[norm == 0] = 1e-8
+    output = output / norm
+    # Remove padding if any
+    output = output[:len(audio) - pad_len] if pad_len > 0 else output
     if output_path:
-        sf.write(output_path, audio_recon, sr)
-        print("Resynthesized audio saved to:", output_path)
-    return audio_recon
+        sf.write(output_path, output, sr)
+    return output
 
 
 if __name__ == "__main__":
@@ -100,4 +106,4 @@ if __name__ == "__main__":
         print("\n*** loading pretrained waveform and latent models",args.waveform_mname,args.latent_mname)
         model = hierarchical_model(w_ckpt_file=w_ckpt_file,w_yaml_file=w_yaml_file,l_ckpt_file=l_ckpt_file,l_yaml_file=l_yaml_file)
     model.eval()
-    encode_and_resynthesize(model, "/Users/luisreyes/Desktop/samples/audio1.wav", "output_resynth.wav")
+    encode_and_resynthesize(model, "/Users/luisreyes/Desktop/samples/audio1.wav", "output_manual_ola.wav")
