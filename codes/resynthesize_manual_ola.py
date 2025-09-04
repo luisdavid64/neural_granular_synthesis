@@ -33,6 +33,7 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
     tar_l = model.w_model.tar_l
     hop_size = tar_l // 2  # 50% overlap
     n_frames = (len(audio) - tar_l) // hop_size + 1
+    # audio = signal.medfilt(audio, )  # simple denoising
     if n_frames < 1:
         n_frames = 1
     # Pad audio to fit full frames
