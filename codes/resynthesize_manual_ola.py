@@ -17,7 +17,7 @@ from models import hierarchical_model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-def encode_and_resynthesize(model, audio_path, output_path=None):
+def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False):
     """
     Resynthesize an entire audio file using the pretrained model, with overlap-add batching.
     """
@@ -54,9 +54,16 @@ def encode_and_resynthesize(model, audio_path, output_path=None):
             end = start + tar_l
             chunk = audio[start:end] * window
             audio_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0).to(device)
-            encoder_outputs = model.w_model.encode(audio_tensor)
-            encoder_outputs["z"] += -0.3
-            audio_recon = model.w_model.decode(encoder_outputs["z"])
+            if use_cond:
+            # encoder_outputs = model.w_model.encode(audio_tensor)
+                l_encoder_outputs, w_encoder_outputs = model.encode(audio_tensor, sampling=False)
+                conds = torch.zeros(l_encoder_outputs["e"].shape[0]).long().to(device)
+                audio_recon, _= model.decode(l_encoder_outputs["e"], conds=conds)
+            else:
+                encoder_outputs = model.w_model.encode(audio_tensor)
+                print(encoder_outputs["z"].shape)
+                audio_recon = model.w_model.decode(encoder_outputs["z"])
+            # exit()
             audio_recon = audio_recon.cpu().squeeze().numpy()
             output[start:end] += audio_recon * window
             norm[start:end] += window ** 2
