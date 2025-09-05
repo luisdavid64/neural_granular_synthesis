@@ -54,7 +54,7 @@ def encode_and_resynthesize(model, audio_path, output_path=None, use_cond=False)
             chunk = audio[start:end] * window
             audio_tensor = torch.tensor(chunk, dtype=torch.float32).unsqueeze(0).to(device)
             encoder_outputs = model.w_model.encode(audio_tensor)
-            all_grains += list(encoder_outputs["z"].cpu().squeeze().numpy())
+            all_grains += list(encoder_outputs["mu"].cpu().squeeze().numpy())
     print(len(all_grains))
     # Apply UMAP or tsne to reduce dimensionality to 2D for visualization
     all_grains = np.array(all_grains)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     parser.add_argument('--samples_id', default=0, type=int)
     parser.add_argument('--temperature', default=1., type=float)
     parser.add_argument('--interp_len', default=4., type=float)
-    parser.add_argument('--audio', default="/Users/luisreyes/Desktop/samples/audio1.wav")
+    parser.add_argument('--audio', default="stopping_enhanced/S-Br-T-th1-1.wav")
     args = parser.parse_args()
     
     if os.path.exists(args.export_dir) is False:

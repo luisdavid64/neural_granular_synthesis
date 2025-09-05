@@ -9,7 +9,10 @@ import os
 import torchaudio
 
 class BiosonixData(Dataset):
-    def __init__(self, data_path, transform=None):
+    def __init__(self, 
+                 data_path,
+                 hop_size=512, 
+                 transform=None):
         """
         Args:
             data (list of np.array): List of audio samples.
@@ -20,6 +23,7 @@ class BiosonixData(Dataset):
         self.data_path = data_path['data']
         self.data = self.get_files(ext='wav')
         self.labels = self.get_files(ext='json', contains='_enhanced')
+        self.hop_size = hop_size
         self.transform = transform
 
     def get_files(self, ext='mp4', contains=None):
