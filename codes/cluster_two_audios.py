@@ -13,7 +13,7 @@ import torch
 from torch import nn
 from util.audio_utils import load_audio_and_resample
 from util.audio_feature_helper import compute_audio_features, FEATURE_NAME_MAP
-from util.utils import plot_umap, stitch_images_dir
+from util.utils import get_grain_labels, plot_umap, stitch_images_dir
 from models import hierarchical_model
 import umap
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -80,26 +80,7 @@ def cluster_UMAP(model, audio_path, audio_path_2, output_path=None, show=True, d
     all_grains_2d = reducer.fit_transform(all_grains)
     
     """Extract labels"""
-
-    grain_times = []
-    for i in range(n_frames):
-        start = i * hop_size
-        end = start + tar_l
-        # Use center time of grain in seconds
-        center_sample = (start + end) // 2
-        center_time = center_sample / sr
-        grain_times.append(center_time)
-
-    # Assign labels to grains
-    grain_labels = []
-    for t in grain_times:
-        label = None
-        for seg in segments:
-            if seg['start_s'] <= t < seg['end_s']:
-                label = seg['label']
-                break
-        grain_labels.append(label if label is not None else 'unknown')
-
+    grain_labels = get_grain_labels(segments, n_frames, hop_size, tar_l, sr)
     # Plot UMAP with colors
     plot_umap(all_grains_2d, grain_labels, output_path, feature_list, show=show)
     return all_grains_2d

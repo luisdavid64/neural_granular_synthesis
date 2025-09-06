@@ -9,7 +9,7 @@ import torch
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
 FEATURE_NAME_MAP = {
-    # 'zcr': 'zero_crossing_rate',
+    'zcr': 'zero_crossing_rate',
     # 'centroid': 'spectral_centroid',
     # 'bandwidth': 'spectral_bandwidth',
     # 'rolloff': 'spectral_rolloff',
@@ -20,7 +20,7 @@ FEATURE_NAME_MAP = {
     # 'sharpness': 'spectral_sharpness',
     # 'roughness': 'spectral_roughness',
     # "clap": "clap",
-    "dac": "dac",
+    # "dac": "dac",
 }
 
 def compute_audio_features(chunk, sr, feature_list):

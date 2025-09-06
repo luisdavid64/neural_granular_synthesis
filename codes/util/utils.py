@@ -52,3 +52,26 @@ def plot_umap(all_grains_2d, grain_labels, output_path, feature_list, show=True)
     # Save fig name based on features used
     plt.savefig(os.path.join(output_path, f"umap_{'_'.join(feature_list)}.png"))
     plt.close()
+
+def get_grain_labels(segments, n_frames, hop_size, tar_l, sr):
+    """Extract labels"""
+
+    grain_times = []
+    for i in range(n_frames):
+        start = i * hop_size
+        end = start + tar_l
+        # Use center time of grain in seconds
+        center_sample = (start + end) // 2
+        center_time = center_sample / sr
+        grain_times.append(center_time)
+
+    # Assign labels to grains
+    grain_labels = []
+    for t in grain_times:
+        label = None
+        for seg in segments:
+            if seg['start_s'] <= t < seg['end_s']:
+                label = seg['label']
+                break
+        grain_labels.append(label if label is not None else 'unknown')
+    return grain_labels
