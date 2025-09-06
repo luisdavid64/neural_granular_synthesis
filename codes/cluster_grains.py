@@ -75,7 +75,7 @@ def cluster_UMAP(model, audio_path, output_path=None, show=True, do_encoding=Tru
     print(f"Extracted {len(all_grains)} grains from audio.")
 
     """ Perform UMAP on grains """
-    reducer = umap.UMAP(n_components=4)
+    reducer = umap.UMAP(n_components=2)
     all_grains_2d = reducer.fit_transform(all_grains)
     
     """Extract labels"""

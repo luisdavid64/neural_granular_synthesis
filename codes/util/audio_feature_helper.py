@@ -10,17 +10,17 @@ device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.ba
 
 FEATURE_NAME_MAP = {
     'zcr': 'zero_crossing_rate',
-    # 'centroid': 'spectral_centroid',
-    # 'bandwidth': 'spectral_bandwidth',
-    # 'rolloff': 'spectral_rolloff',
-    # 'mfcc': 'mfcc',
-    # 'flatness': 'spectral_flatness',
-    # 'rms': 'rms',
-    # 'flux': 'spectral_flux',
-    # 'sharpness': 'spectral_sharpness',
-    # 'roughness': 'spectral_roughness',
-    # "clap": "clap",
-    # "dac": "dac",
+    'centroid': 'spectral_centroid',
+    'bandwidth': 'spectral_bandwidth',
+    'rolloff': 'spectral_rolloff',
+    'mfcc': 'mfcc',
+    'flatness': 'spectral_flatness',
+    'rms': 'rms',
+    'flux': 'spectral_flux',
+    'sharpness': 'spectral_sharpness',
+    'roughness': 'spectral_roughness',
+    "clap": "clap",
+    "dac": "dac",
 }
 
 def compute_audio_features(chunk, sr, feature_list):
@@ -81,7 +81,6 @@ def compute_audio_features(chunk, sr, feature_list):
             x = model.preprocess(chunk.audio_data, chunk.sample_rate)
             z, codes, latents, _, _ = model.encode(x)
             z = z.cpu().numpy()
-            print("YO")
             features.extend(z.flatten())
 
         else:
