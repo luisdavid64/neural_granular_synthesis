@@ -23,55 +23,59 @@ FEATURE_NAME_MAP = {
     "dac": "dac",
 }
 
+model_path = dac.utils.download(model_type="16khz")
+model = dac.DAC.load(model_path)
+model.to(device)
+model.eval()
+for param in model.parameters():
+    param.requires_grad = False
+    
 def compute_audio_features(chunk, sr, feature_list):
     """
     Compute selected audio features from librosa for a given chunk.
     feature_list: list of short feature names (e.g. ['zcr', 'centroid', ...])
-    Returns a 1D numpy array of concatenated feature values.
+    Returns a dict mapping feature names to numpy arrays.
     """
-    features = []
+    features = {}
     for short_name in feature_list:
         name = FEATURE_NAME_MAP.get(short_name, short_name)
         if name == 'zero_crossing_rate':
             val = librosa.feature.zero_crossing_rate(y=chunk).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'spectral_centroid':
             val = librosa.feature.spectral_centroid(y=chunk, sr=sr).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'spectral_bandwidth':
             val = librosa.feature.spectral_bandwidth(y=chunk, sr=sr).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'spectral_rolloff':
             val = librosa.feature.spectral_rolloff(y=chunk, sr=sr).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'mfcc':
             mfccs = librosa.feature.mfcc(y=chunk, sr=sr, n_mfcc=13)
-            features.extend(np.mean(mfccs, axis=1))
+            features[name] = np.mean(mfccs, axis=1)
         elif name == 'spectral_flatness':
             val = librosa.feature.spectral_flatness(y=chunk).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'rms':
             val = librosa.feature.rms(y=chunk).mean()
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'spectral_flux':
             S = np.abs(librosa.stft(chunk))
             flux = np.sqrt(np.sum(np.diff(S, axis=1)**2, axis=0)).mean()
-            features.append(flux)
+            features[name] = np.array([flux])
         elif name == 'spectral_sharpness':
             val = timbral_sharpness_numpy(chunk, sr)
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'spectral_roughness':
             val = timbral_roughness_numpy(chunk, sr)
-            features.append(val)
+            features[name] = np.array([val])
         elif name == 'clap':
             from util.clap_utils import ClapEmbedder
             embedder = ClapEmbedder()
             emb = embedder.embed_numpy(chunk, sr=sr, batch_size=1, max_length_s=10.0, pool_long="mean")
-            features.extend(emb.flatten())
+            features[name] = emb.flatten()
         elif name == 'dac':
-            model_path = dac.utils.download(model_type="16khz")
-            model = dac.DAC.load(model_path)
-            model.to(device)
             # Resample with librosa to 16kHz if needed
             if sr != 16000:
                 chunk = librosa.resample(chunk, orig_sr=sr, target_sr=16000)
@@ -81,8 +85,7 @@ def compute_audio_features(chunk, sr, feature_list):
             x = model.preprocess(chunk.audio_data, chunk.sample_rate)
             z, codes, latents, _, _ = model.encode(x)
             z = z.cpu().numpy()
-            features.extend(z.flatten())
-
+            features[name] = z.flatten()
         else:
             raise ValueError(f"Unknown feature name: {short_name}")
-    return np.array(features)
+    return features
