@@ -1,6 +1,7 @@
 import soundfile as sf
 import torch
 import numpy as np
+import scipy
 from argparse import ArgumentParser
 import os
 import glob
@@ -10,7 +11,7 @@ from scipy import signal
 import pathlib
 import torch
 from torch import nn
-from util.audio_utils import load_audio_and_resample
+from scipy.signal import resample
 from util.audio_feature_helper import compute_audio_features, FEATURE_NAME_MAP
 from models import hierarchical_model
 import umap
@@ -54,13 +55,24 @@ def stitch_images():
     stitched_img.save('umap_feature_grid.png')
     stitched_img.show()
 
-def cluster_UMAP(model, audio_path, output_path=None, show=True, do_encoding=True, feature_list=['zcr', 'centroid', 'bandwidth', 'rolloff', 'mfcc']):
+def cluster_UMAP(model, audio_path, audio_path_2, output_path=None, show=True, do_encoding=True, feature_list=['zcr', 'centroid', 'bandwidth', 'rolloff', 'mfcc']):
     """
     Resynthesize an entire audio file using the pretrained model, with overlap-add batching.
     """
     model.to(device)
+    audio, sr = sf.read(audio_path)
+    if audio.ndim > 1:
+        audio = np.mean(audio, axis=1)
+    music_audio, music_sr = sf.read(audio_path_2)
+    if music_audio.ndim > 1:
+        music_audio = np.mean(music_audio, axis=1)
     target_sr = model.w_model.hparams.sr
-    audio, sr = load_audio_and_resample(audio_path, target_sr)
+    if sr != target_sr:
+        audio = resample(audio, int(len(audio) * target_sr / sr))
+        sr = target_sr
+    if music_sr != target_sr:
+        music_audio = resample(music_audio, int(len(music_audio) * target_sr / music_sr))
+        music_sr = target_sr
     tar_l = model.w_model.tar_l
     # hop_size = tar_l // 2  # 50% overlap
     hop_size = 512
@@ -161,7 +173,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_dir', default="outputs", type=str)
     parser.add_argument('--export_dir', default="outputs/generations_luis", type=str)
     parser.add_argument('--audio', default="../stopping_enhanced/S-Br-T-th1-1.wav")
-    parser.add_argument('--audio_2', default=None, type=str)
+    parser.add_argument('--audio_2', default="../stopping_enhanced/S-Br-T-th1-1.wav")
     parser.add_argument('--do_encoding', default=0, type=int)
     parser.add_argument('--do_single', default=1, type=int)
     args = parser.parse_args()
@@ -201,4 +213,4 @@ if __name__ == "__main__":
             cluster_UMAP(model, args.audio, out_path, do_encoding=args.do_encoding > 0, show=False, feature_list=[feature])
         stitch_images()
     else:
-        cluster_UMAP(model, args.audio, out_path, do_encoding=args.do_encoding > 0, show=False)
+        cluster_UMAP(model, args.audio, args.audio_2, out_path, do_encoding=args.do_encoding > 0, show=False)
