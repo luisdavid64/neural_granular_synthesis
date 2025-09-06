@@ -11,8 +11,9 @@ from scipy import signal
 import pathlib
 import torch
 from torch import nn
-from scipy.signal import resample
+from util.audio_utils import load_audio_and_resample
 from util.audio_feature_helper import compute_audio_features, FEATURE_NAME_MAP
+from util.utils import stitch_images_dir
 from models import hierarchical_model
 import umap
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -24,36 +25,6 @@ font = {
         'size'   : 16
 }
 matplotlib.rc('font', **font)
-from PIL import Image
-
-def stitch_images():
-    img_dir = "umap_exp"
-    # List all PNG files in the directory
-    img_files = [f for f in os.listdir(img_dir) if f.endswith('.png')]
-    img_files.sort()  # Optional: sort alphabetically
-
-    # Load images
-    images = [Image.open(os.path.join(img_dir, f)) for f in img_files]
-
-    # Determine grid size (e.g., 2 columns)
-    n_cols = 4
-    n_rows = (len(images) + n_cols - 1) // n_cols
-
-    # Get image size (assume all images are the same size)
-    img_w, img_h = images[0].size
-
-    # Create a blank canvas
-    stitched_img = Image.new('RGB', (n_cols * img_w, n_rows * img_h), (255, 255, 255))
-
-    # Paste images into the canvas
-    for idx, img in enumerate(images):
-        row = idx // n_cols
-        col = idx % n_cols
-        stitched_img.paste(img, (col * img_w, row * img_h))
-
-    # Save or show the result
-    stitched_img.save('umap_feature_grid.png')
-    stitched_img.show()
 
 def cluster_UMAP(model, audio_path, audio_path_2, output_path=None, show=True, do_encoding=True, feature_list=['zcr', 'centroid', 'bandwidth', 'rolloff', 'mfcc']):
     """
@@ -61,19 +32,10 @@ def cluster_UMAP(model, audio_path, audio_path_2, output_path=None, show=True, d
     """
     model.to(device)
     audio, sr = sf.read(audio_path)
-    if audio.ndim > 1:
-        audio = np.mean(audio, axis=1)
-    music_audio, music_sr = sf.read(audio_path_2)
-    if music_audio.ndim > 1:
-        music_audio = np.mean(music_audio, axis=1)
-    target_sr = model.w_model.hparams.sr
-    if sr != target_sr:
-        audio = resample(audio, int(len(audio) * target_sr / sr))
-        sr = target_sr
-    if music_sr != target_sr:
-        music_audio = resample(music_audio, int(len(music_audio) * target_sr / music_sr))
-        music_sr = target_sr
     tar_l = model.w_model.tar_l
+    target_sr = model.w_model.hparams.sr
+    audio, sr = load_audio_and_resample(audio_path, target_sr)
+    music_audio, music_sr = load_audio_and_resample(audio_path, target_sr)
     # hop_size = tar_l // 2  # 50% overlap
     hop_size = 512
     n_frames = (len(audio) - tar_l) // hop_size + 1
@@ -211,6 +173,6 @@ if __name__ == "__main__":
         # Go through features one by one
         for feature in FEATURE_NAME_MAP.keys():
             cluster_UMAP(model, args.audio, out_path, do_encoding=args.do_encoding > 0, show=False, feature_list=[feature])
-        stitch_images()
+        stitch_images_dir()
     else:
         cluster_UMAP(model, args.audio, args.audio_2, out_path, do_encoding=args.do_encoding > 0, show=False)

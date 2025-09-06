@@ -10,6 +10,7 @@ from scipy import signal
 import pathlib
 import torch
 from torch import nn
+from util.utils import stitch_images_dir
 from util.audio_utils import load_audio_and_resample
 from util.audio_feature_helper import compute_audio_features, FEATURE_NAME_MAP
 from models import hierarchical_model
@@ -25,34 +26,6 @@ font = {
 matplotlib.rc('font', **font)
 from PIL import Image
 
-def stitch_images():
-    img_dir = "umap_exp"
-    # List all PNG files in the directory
-    img_files = [f for f in os.listdir(img_dir) if f.endswith('.png')]
-    img_files.sort()  # Optional: sort alphabetically
-
-    # Load images
-    images = [Image.open(os.path.join(img_dir, f)) for f in img_files]
-
-    # Determine grid size (e.g., 2 columns)
-    n_cols = 4
-    n_rows = (len(images) + n_cols - 1) // n_cols
-
-    # Get image size (assume all images are the same size)
-    img_w, img_h = images[0].size
-
-    # Create a blank canvas
-    stitched_img = Image.new('RGB', (n_cols * img_w, n_rows * img_h), (255, 255, 255))
-
-    # Paste images into the canvas
-    for idx, img in enumerate(images):
-        row = idx // n_cols
-        col = idx % n_cols
-        stitched_img.paste(img, (col * img_w, row * img_h))
-
-    # Save or show the result
-    stitched_img.save('umap_feature_grid.png')
-    stitched_img.show()
 
 def cluster_UMAP(model, audio_path, output_path=None, show=True, do_encoding=True, feature_list=['zcr', 'centroid', 'bandwidth', 'rolloff', 'mfcc']):
     """
@@ -199,6 +172,6 @@ if __name__ == "__main__":
         # Go through features one by one
         for feature in FEATURE_NAME_MAP.keys():
             cluster_UMAP(model, args.audio, out_path, do_encoding=args.do_encoding > 0, show=False, feature_list=[feature])
-        stitch_images()
+        stitch_images_dir()
     else:
         cluster_UMAP(model, args.audio, out_path, do_encoding=args.do_encoding > 0, show=False)
