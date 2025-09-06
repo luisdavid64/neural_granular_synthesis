@@ -10,7 +10,7 @@ from scipy import signal
 import pathlib
 import torch
 from torch import nn
-from util.utils import stitch_images_dir
+from util.utils import plot_umap, stitch_images_dir
 from util.audio_utils import load_audio_and_resample
 from util.audio_feature_helper import compute_audio_features, FEATURE_NAME_MAP
 from models import hierarchical_model
@@ -98,27 +98,8 @@ def cluster_UMAP(model, audio_path, output_path=None, show=True, do_encoding=Tru
                 label = seg['label']
                 break
         grain_labels.append(label if label is not None else 'unknown')
-
-    unique_labels = sorted(set(grain_labels))
-    palette = sns.color_palette("tab10", len(unique_labels))
-    label_to_color = {lab: palette[i] for i, lab in enumerate(unique_labels)}
-
-    # Plot UMAP with colors
-    plt.figure(figsize=(10, 10))
-    for lab in unique_labels:
-        idx = [i for i, l in enumerate(grain_labels) if l == lab]
-        plt.scatter(all_grains_2d[idx, 0], all_grains_2d[idx, 1], s=20, alpha=0.6, label=lab, color=label_to_color[lab])
-    # add features to title
-    plt.title(f"UMAP of Audio Grains (Labeled) - Features: {', '.join(feature_list)}")
-    plt.xlabel("Dimension 1")
-    plt.ylabel("Dimension 2")
-    plt.legend()
-    plt.axis('equal')
-    if show:
-        plt.show()
-    # Save fig name based on features used
-    plt.savefig(os.path.join(output_path, f"umap_{'_'.join(feature_list)}.png"))
-    plt.close()
+        
+    plot_umap(all_grains_2d, grain_labels, output_path, feature_list, show=show)
     return all_grains_2d
 
 
