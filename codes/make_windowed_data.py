@@ -2,6 +2,8 @@ import pandas as pd
 from util.audio_feature_helper import FEATURE_NAME_MAP, compute_audio_features
 import librosa
 import numpy as np
+import pandas as pd
+from pathlib import Path
 
 
 def make_windowed_data(audio_path, segments, feature_list,
@@ -43,16 +45,17 @@ def make_windowed_data(audio_path, segments, feature_list,
             for feat_name, feat in feats.items():
                 row[feat_name] = feat
             rows.append(row)
+            break
+        break
     
     return pd.DataFrame(rows)
 
-import pandas as pd
-from pathlib import Path
 
-def build_master_table(items, feature_list, win_len=2048, hop_len=512, sr=22050, out_parquet=None):
+def build_master_table(items, feature_list, win_len=2048, hop_len=512, sr=22050):
     """
     items: list of dicts like {"audio_path": ".../file.wav", "segments": [...]}
     Returns a single DataFrame with all windows from all files.
+    Saves features to npy/npz and metadata to JSON.
     """
     dfs = []
     for audio_idx, item in enumerate(items):
@@ -78,22 +81,43 @@ def build_master_table(items, feature_list, win_len=2048, hop_len=512, sr=22050,
         df_file["hop_len"] = hop_len
 
         dfs.append(df_file)
-        print(df_file)
-        exit()
-
-        # (optional) save per-file shard
-        # df_file.to_parquet(f"{audio_id}.parquet", index=False)
+        break
 
     master = pd.concat(dfs, ignore_index=True)
-
-    # create a unique window_id
     master.insert(0, "window_id", master.index.map(lambda i: f"w{i:010d}"))
 
-    if out_parquet:
-        master.to_parquet(out_parquet, index=False)
+    # Expand feature vector columns (e.g., CLAP) into separate columns
+    expanded = master.copy()
+    for col in master.columns:
+        if master[col].dtype == 'object' and isinstance(master[col].iloc[0], (np.ndarray, list)):
+            arrs = np.stack(master[col].values)
+            for i in range(arrs.shape[1]):
+                expanded[f"{col}_{i}"] = arrs[:, i]
+            expanded = expanded.drop(columns=[col])
 
-    return master
+    # Select only numeric columns for npy/npz
+    feature_cols = [col for col in expanded.columns if expanded[col].dtype in [np.float32, np.float64, np.int32, np.int64]]
+    np.save('windowed_data.npy', expanded[feature_cols].values)
+    np.savez('windowed_data.npz', **{col: expanded[col].values for col in feature_cols})
 
+    # Save metadata (non-numeric columns and window_id)
+    meta_cols = [col for col in expanded.columns if col not in feature_cols]
+    meta_dict = expanded[meta_cols].to_dict(orient='list')
+    feature_column_map = {}
+    for feat in feature_list:
+        if feat in expanded.columns:
+            feature_column_map[feat] = [feat]
+        else:
+            # Vector features: collect all columns starting with feat + '_'
+            cols = [col for col in expanded.columns if col.startswith(feat + '_')]
+            feature_column_map[feat] = cols
+
+    meta_dict['feature_column_map'] = feature_column_map
+    import json
+    with open('windowed_data_meta.json', 'w') as f:
+        json.dump(meta_dict, f, indent=2)
+    print("Saved features to windowed_data.npy and windowed_data.npz, metadata to windowed_data_meta.json")
+    return expanded
 
 if __name__ == "__main__":
     import json
@@ -105,7 +129,6 @@ if __name__ == "__main__":
     parser.add_argument('--win_len', default=2048, type=int, help="Window length in samples")
     parser.add_argument('--hop_len', default=512, type=int, help="Hop length in samples")
     parser.add_argument('--sr', default=22050, type=int, help="Sample rate")
-    parser.add_argument('--out_parquet', default="windowed_data.parquet", type=str, help="Output Parquet file path")
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -131,8 +154,7 @@ if __name__ == "__main__":
         feature_list=feature_list,
         win_len=args.win_len,
         hop_len=args.hop_len,
-        sr=args.sr,
-        out_parquet=args.out_parquet
+        sr=args.sr
     )
 
-    print(f"Master table with {len(master_df)} windows saved to {args.out_parquet}")
+    print(f"Master table with {len(master_df)} windows saved to windowed_data.npy, windowed_data.npz, and windowed_data_meta.json")

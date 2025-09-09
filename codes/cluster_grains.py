@@ -24,7 +24,7 @@ def cluster_UMAP(audio_path, output_path=None, show=True, feature_list=['zcr', '
     target_sr = 22050  # Set your desired sample rate
     audio, sr = load_audio_and_resample(audio_path, target_sr)
     tar_l = 2048        # Set your desired grain length
-    hop_size = 512
+    hop_size = 2048
     n_frames = (len(audio) - tar_l) // hop_size + 1
     if n_frames < 1:
         n_frames = 1
